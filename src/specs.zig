@@ -18,7 +18,15 @@ const V_SYNC_HZ = 59.73; // Hz
 
 const SOUND_CHANNEL_COUNT = 4;
 
-const Memory = struct { bytes: [0xFFFF + 1]u8 };
+const Memory = struct {
+    bytes: [0xFFFF + 1]u8,
+    pub fn get(self: Memory, addr: u16) u8 {
+        return self.bytes[addr];
+    }
+    pub fn set(self: *Memory, addr: u16, v: u8) void {
+        self.bytes[addr] = v;
+    }
+};
 
 fn init_memory() Memory {
     return Memory{ .bytes = [_]u8{0} ** 65536 };
@@ -37,11 +45,10 @@ const JOYPAD_INTERRUPT: u8 = 0b1000;
 const JoypadReadError = error{ OutOfBounds, ButtonMuxIssue };
 fn read_joypad(m: Memory) JoypadInput {
     var input = m.bytes[JOYPAD_ADDR];
-    _ = input;
     const BUTTON_MASK = 0b00_11_0000;
     const INPUT_MASK = 0b00_00_1111;
 
-    switch (m.bytes[JOYPAD_ADDR] & BUTTON_MASK) {
+    switch (input & BUTTON_MASK) {
         // Select actions button
         0b00_01_0000 => {
             return switch (m.bytes[JOYPAD_ADDR] & INPUT_MASK) {
@@ -49,7 +56,10 @@ fn read_joypad(m: Memory) JoypadInput {
                 0b0000_0100 => JoypadInput.SELECT,
                 0b0000_0010 => JoypadInput.B,
                 0b0000_0001 => JoypadInput.A,
-                else => unreachable,
+                else => {
+                    std.log.err("err {}", .{m.bytes[JOYPAD_ADDR]});
+                    unreachable;
+                },
             };
         },
         // Select directions button
@@ -59,19 +69,25 @@ fn read_joypad(m: Memory) JoypadInput {
                 0b0000_0100 => JoypadInput.UP,
                 0b0000_0010 => JoypadInput.LEFT,
                 0b0000_0001 => JoypadInput.RIGHT,
-                else => unreachable,
+                else => {
+                    std.log.err("err {}", .{m.bytes[JOYPAD_ADDR]});
+                    unreachable;
+                },
             };
         },
-        else => unreachable,
+        else => {
+            std.log.err("err {}", .{m.bytes[JOYPAD_ADDR]});
+            unreachable;
+        },
     }
 }
 
 fn write_joypad(ji: JoypadInput, m: *Memory) void {
     switch (ji) {
-        JoypadInput.DOWN, JoypadInput.START => m.bytes[JOYPAD_ADDR] &= 0b0000_1000,
-        JoypadInput.UP, JoypadInput.SELECT => m.bytes[JOYPAD_ADDR] &= 0b0000_0100,
-        JoypadInput.LEFT, JoypadInput.B => m.bytes[JOYPAD_ADDR] &= 0b0000_0010,
-        JoypadInput.RIGHT, JoypadInput.A => m.bytes[JOYPAD_ADDR] &= 0b0000_0001,
+        JoypadInput.DOWN, JoypadInput.START => m.bytes[JOYPAD_ADDR] |= 0b00_00_1000,
+        JoypadInput.UP, JoypadInput.SELECT => m.bytes[JOYPAD_ADDR] |= 0b00_00_0100,
+        JoypadInput.LEFT, JoypadInput.B => m.bytes[JOYPAD_ADDR] |= 0b00_00_0010,
+        JoypadInput.RIGHT, JoypadInput.A => m.bytes[JOYPAD_ADDR] |= 0b00_00_0001,
     }
 }
 
@@ -80,12 +96,21 @@ test "expect memory to read and write joypad" {
     // Directions
     mem.bytes[JOYPAD_ADDR] ^= mem.bytes[JOYPAD_ADDR];
     mem.bytes[JOYPAD_ADDR] |= 0b00_10_0000;
-    write_joypad(JoypadInput.A, &mem);
-    try std.testing.expectEqual(JoypadInput.A, read_joypad(mem));
+    write_joypad(JoypadInput.RIGHT, &mem);
+    try std.testing.expectEqual(JoypadInput.RIGHT, read_joypad(mem));
 
-    // Zero out
     mem.bytes[JOYPAD_ADDR] ^= mem.bytes[JOYPAD_ADDR];
     mem.bytes[JOYPAD_ADDR] |= 0b00_10_0000;
-    write_joypad(JoypadInput.B, &mem);
-    try std.testing.expectEqual(JoypadInput.B, read_joypad(mem));
+    write_joypad(JoypadInput.LEFT, &mem);
+    try std.testing.expectEqual(JoypadInput.LEFT, read_joypad(mem));
+
+    mem.bytes[JOYPAD_ADDR] ^= mem.bytes[JOYPAD_ADDR];
+    mem.bytes[JOYPAD_ADDR] |= 0b00_10_0000;
+    write_joypad(JoypadInput.UP, &mem);
+    try std.testing.expectEqual(JoypadInput.UP, read_joypad(mem));
+
+    mem.bytes[JOYPAD_ADDR] ^= mem.bytes[JOYPAD_ADDR];
+    mem.bytes[JOYPAD_ADDR] |= 0b00_10_0000;
+    write_joypad(JoypadInput.DOWN, &mem);
+    try std.testing.expectEqual(JoypadInput.DOWN, read_joypad(mem));
 }
