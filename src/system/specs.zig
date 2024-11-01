@@ -44,7 +44,7 @@ const JOYPAD_ADDR: u16 = 0xFF00;
 const JOYPAD_INTERRUPT: u8 = 0b1000;
 const JoypadReadError = error{ OutOfBounds, ButtonMuxIssue };
 fn read_joypad(m: Memory) JoypadInput {
-    var input = m.bytes[JOYPAD_ADDR];
+    const input = m.bytes[JOYPAD_ADDR];
     const BUTTON_MASK = 0b00_11_0000;
     const INPUT_MASK = 0b00_00_1111;
 
